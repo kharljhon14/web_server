@@ -98,7 +98,7 @@ struct AppState {
 }
 
 async fn create_task(app_state: web::Data<AppState>, task: web::Json<Task>) -> impl Responder {
-    let mut db = app_state.db.lock().expect("Faild to lock database");
+    let mut db = app_state.db.lock().expect("Failed to lock database");
     db.insert(task.into_inner());
 
     let _ = db.save_to_file();
@@ -107,12 +107,17 @@ async fn create_task(app_state: web::Data<AppState>, task: web::Json<Task>) -> i
 }
 
 async fn read_task(app_state: web::Data<AppState>, id: web::Path<u64>) -> impl Responder {
-    let mut db = app_state.db.lock().expect("Failed to lock database");
+    let db = app_state.db.lock().expect("Failed to lock database");
 
     match db.get(&id.into_inner()) {
         Some(task) => HttpResponse::Ok().json(task),
         None => HttpResponse::NotFound().finish(),
     }
+}
+async fn read_all_task(app_state: web::Data<AppState>) -> impl Responder {
+    let mut db = app_state.db.lock().expect("Failed to lock database");
+
+    HttpResponse::Ok().json(&db.tasks)
 }
 
 #[actix_web::main]
@@ -138,8 +143,9 @@ async fn main() -> std::io::Result<()> {
                     .max_age(36000),
             )
             .app_data(data.clone())
-            .route("/task", web::post().to(create_task))
-            .route("/task/{id}", web::get().to(read_task))
+            .route("/tasks", web::post().to(create_task))
+            .route("/tasks", web::get().to(read_all_task))
+            .route("/tasks/{id}", web::get().to(read_task))
     })
     .bind("127.0.0.1:8000")?
     .run()
