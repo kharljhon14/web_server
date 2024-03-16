@@ -106,4 +106,32 @@ async fn create_task(app_state: web::Data<AppState>, task: web::Json<Task>) -> i
     HttpResponse::Ok().finish()
 }
 
-fn main() {}
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    let db = match Database::load_from_file() {
+        Ok(db) => db,
+        Err(_) => Database::new(),
+    };
+
+    let data = web::Data::new(AppState { db: Mutex::new(db) });
+
+    HttpServer::new(move || {
+        App::new()
+            .wrap(
+                Cors::permissive()
+                    .allowed_origin_fn(|origin, _req_head| {
+                        origin.as_bytes().starts_with(b"http://localhost") || origin == "null"
+                    })
+                    .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
+                    .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT])
+                    .allowed_header(header::CONTENT_TYPE)
+                    .supports_credentials()
+                    .max_age(36000),
+            )
+            .app_data(data.clone())
+            .route("/task", web::post().to(create_task))
+    })
+    .bind("127.0.0.1:8000")?
+    .run()
+    .await
+}
