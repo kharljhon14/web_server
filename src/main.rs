@@ -1,5 +1,5 @@
 use actix_cors::Cors;
-use actix_web::{http::header, web, App, HttpRequest, HttpServer, Responder};
+use actix_web::{http::header, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 
 use serde::{Deserialize, Serialize};
 
@@ -91,6 +91,19 @@ impl Database {
 
         Ok(db)
     }
+}
+
+struct AppState {
+    db: Mutex<Database>,
+}
+
+async fn create_task(app_state: web::Data<AppState>, task: web::Json<Task>) -> impl Responder {
+    let mut db = app_state.db.lock().expect("Faild to lock database");
+    db.insert(task.into_inner());
+
+    let _ = db.save_to_file();
+
+    HttpResponse::Ok().finish()
 }
 
 fn main() {}
