@@ -3,9 +3,7 @@ use actix_web::{http::header, web, App, HttpRequest, HttpResponse, HttpServer, R
 
 use serde::{Deserialize, Serialize};
 
-use reqwest::Client as HttpClient;
-
-use async_trait::async_trait;
+use reqwest::{dns, Client as HttpClient};
 
 use std::collections::HashMap;
 use std::fs;
@@ -114,10 +112,20 @@ async fn read_task(app_state: web::Data<AppState>, id: web::Path<u64>) -> impl R
         None => HttpResponse::NotFound().finish(),
     }
 }
+
 async fn read_all_task(app_state: web::Data<AppState>) -> impl Responder {
+    let db = app_state.db.lock().expect("Failed to lock database");
+
+    HttpResponse::Ok().json(db.get_all())
+}
+
+async fn delete_task(app_state: web::Data<AppState>, id: web::Path<u64>) -> impl Responder {
     let mut db = app_state.db.lock().expect("Failed to lock database");
 
-    HttpResponse::Ok().json(&db.tasks)
+    db.delete(&id.into_inner());
+    let _ = db.save_to_file();
+
+    HttpResponse::Ok().finish()
 }
 
 #[actix_web::main]
@@ -146,6 +154,7 @@ async fn main() -> std::io::Result<()> {
             .route("/tasks", web::post().to(create_task))
             .route("/tasks", web::get().to(read_all_task))
             .route("/tasks/{id}", web::get().to(read_task))
+            .route("/tasks/{id}", web::delete().to(delete_task))
     })
     .bind("127.0.0.1:8000")?
     .run()
