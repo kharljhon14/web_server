@@ -104,6 +104,15 @@ async fn create_task(app_state: web::Data<AppState>, task: web::Json<Task>) -> i
     HttpResponse::Ok().finish()
 }
 
+async fn update_task(app_state: web::Data<AppState>, task: web::Json<Task>) -> impl Responder {
+    let mut db = app_state.db.lock().expect("Failed to lock database");
+
+    db.update(task.into_inner());
+    let _ = db.save_to_file();
+
+    HttpResponse::Ok().finish()
+}
+
 async fn read_task(app_state: web::Data<AppState>, id: web::Path<u64>) -> impl Responder {
     let db = app_state.db.lock().expect("Failed to lock database");
 
@@ -153,6 +162,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(data.clone())
             .route("/tasks", web::post().to(create_task))
             .route("/tasks", web::get().to(read_all_task))
+            .route("/tasks/{id}", web::put().to(update_task))
             .route("/tasks/{id}", web::get().to(read_task))
             .route("/tasks/{id}", web::delete().to(delete_task))
     })
