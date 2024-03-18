@@ -1,5 +1,5 @@
 use actix_cors::Cors;
-use actix_web::{http::header, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{http::header, web, App, HttpResponse, HttpServer, Responder};
 
 use serde::{Deserialize, Serialize};
 
@@ -137,6 +137,30 @@ async fn delete_task(app_state: web::Data<AppState>, id: web::Path<u64>) -> impl
     HttpResponse::Ok().finish()
 }
 
+// User auth functions
+
+async fn register(app_state: web::Data<AppState>, user: web::Json<User>) -> impl Responder {
+    let mut db = app_state.db.lock().expect("Failed to lock database");
+
+    db.insert_user(user.into_inner());
+
+    let _ = db.save_to_file();
+
+    HttpResponse::Ok().finish()
+}
+
+async fn login(app_state: web::Data<AppState>, user: web::Json<User>) -> impl Responder {
+    let db = app_state.db.lock().expect("Failed to lock database");
+
+    match db.get_user_by_name(&user.username) {
+        Some(stored_user) if stored_user.password == user.password => {
+            HttpResponse::Ok().body("Logged in!")
+        }
+        None => HttpResponse::NotFound().finish(),
+        _ => HttpResponse::BadRequest().body("Invalid username or password"),
+    }
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let db = match Database::load_from_file() {
@@ -165,6 +189,8 @@ async fn main() -> std::io::Result<()> {
             .route("/tasks/{id}", web::put().to(update_task))
             .route("/tasks/{id}", web::get().to(read_task))
             .route("/tasks/{id}", web::delete().to(delete_task))
+            .route("/register", web::post().to(register))
+            .route("/login", web::post().to(login))
     })
     .bind("127.0.0.1:8000")?
     .run()
